@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+      body, html{
+        margin: 0;
+        height: 100vh;
+        background: linear-gradient(-45deg, #204, #000);
+        overflow: hidden;
+      }
+      #c{
+        border: 3px solid #0Ff3;
+        position: absolute;
+        background: #04f1;
+        left: 50%;
+        top: 50%;
+        border-radius: 10px;
+        transform: translate(-50%, -50%);
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id=c></canvas>
+    <script>
+      c = document.querySelector('#c')
+      x = c.getContext('2d')
+      C = Math.cos
+      S = Math.sin
+      t = 0
+      T = Math.tan
+
+      rsz = window.onresize = () =>{
+        let b = document.body
+        let margin = 10
+        let n
+        let d = .5625
+        if(b.clientHeight/b.clientWidth > d){
+          c.style.width = `${(n=b.clientWidth) - margin*2}px`
+          c.style.height = `${n*d - margin*2}px`
+        }else{
+          c.style.height = `${(n=b.clientHeight) - margin*2}px`
+          c.style.width = `${n/d - margin*2}px`
+        }
+      }
+
+      rsz()
+
+      async function Draw(){
+        if(!t){
+          oX = oY = oZ = 0
+          Rn = Math.random
+          R = (Rl,Pt,Yw,m) => {
+            let p
+            M = Math
+            A = M.atan2
+            H = M.hypot
+            X = S(p=A(X,Y)+Rl) * (d=H(X,Y))
+            Y = C(p) * d
+            Y = S(p=A(Y,Z)+Pt) * (d=H(Y,Z))
+            Z = C(p)*d
+            X = S(p=A(X,Z)+Yw) * (d=H(X,Z))
+            Z = C(p)*d
+            if(m){
+              X+=oX
+              Y+=oY
+              Z+=oZ
+            }
+          }
+          
+          RGBFromHSV = (H, S, V) => {
+            while(H<0) H+=360;
+            while(H>=360) H-=360;
+            let C = V*S
+            let X = C * (1-Math.abs((H/60)%2-1))
+            let m = V-C
+            let R_, G_, B_
+            if(H>=0 && H < 60)    R_=C, G_=X, B_=0
+            if(H>=60 && H < 120)  R_=X, G_=C, B_=0
+            if(H>=120 && H < 180) R_=0, G_=C, B_=X
+            if(H>=180 && H < 240) R_=0, G_=X, B_=C
+            if(H>=240 && H < 300) R_=X, G_=0, B_=C
+            if(H>=300 && H < 360) R_=C, G_=0, B_=X
+            let R = (R_+m)*256
+            let G = (G_+m)*256
+            let B = (B_+m)*256
+            return [R,G,B]
+          }
+
+          Q = () => [c.width/2+X/Z*900/2, c.height/2+Y/Z*900/2]
+          
+          feed          = .055*.3  //.055
+          kill          = .062*.7  //.062
+          speed         = 6
+          res           = 100
+          imageData     = x.createImageData(res, res)
+          buffer        = document.createElement('canvas')
+          buffer.width  = res
+          buffer.height = res
+          bctx          = buffer.getContext('2d')
+          
+          seeds = []
+          sd    = res
+          for(i=sd; i--;){
+            ls = 70//i*8
+            X = res/2 + C(p=Math.PI*4/sd*i) * ls/2
+            Y = -res + res/sd*i*2 //C(p) * ls
+            Z = 0
+            seeds = [...seeds, [X, Y, Z]]
+          }
+          
+          data = Array(res**2).fill().map((v, i) => {
+            X     = (i%res)
+            Y     = (i/res|0)
+            Z     = 0
+            state = true
+            seeds.map(q => {
+              tx = q[0]
+              ty = q[1]
+              if(Math.hypot(X-tx, Y-ty) < 4) state = false
+            })
+            A = state
+            B = !A
+            return [X, Y, Z, A, B,   A, B]
+          })
+          
+          process = () => {
+            
+            //f1 = .2
+            //f2 = .05
+            f1 = 1/6
+            f2 = 1/6/2
+            
+            for(n=speed;n--;){
+              data.map(v=>{
+                v[3] = v[5]
+                v[4] = v[6]
+              })
+              data.map((v, i) => {
+
+                X = v[0]
+                Y = v[1]
+                
+                l = (X ? X - 1 : res - 1) + Y * res
+                u = (Y ? Y - 1 : res - 1) * res + X
+                r = ((X + 1) % res) + Y * res
+                d = ((Y + 1) % res) * res + X
+                lu = (X ? X - 1 : res - 1) + (Y ? Y - 1 : res - 1) * res
+                ur = (Y ? Y - 1 : res - 1) * res + ((X + 1) % res)
+                rd = ((X + 1) % res) + ((Y + 1) % res) * res
+                ld = ((Y + 1) % res) * res + (X ? X - 1 : res - 1)
+              
+                for(m=2; m--;){
+                  diffusionRate = m ? 1 : .5
+                  o1 = m ? 3 : 4
+                  o2 = m ? 5 : 6
+                  val = data[i][o1] * -1
+                  val += data[l][o1] * f1
+                  val += data[u][o1] * f1
+                  val += data[r][o1] * f1
+                  val += data[d][o1] * f1
+                  val += data[lu][o1] * f2
+                  val += data[ur][o1] * f2
+                  val += data[rd][o1] * f2
+                  val += data[ld][o1] * f2
+                  data[i][o2] = data[i][o1] + (diffusionRate * val + (m ? -1 : 1) * (data[i][3]*data[i][4]**2) + (m ? feed*(1-data[i][3]) : -(kill+feed)*data[i][4]))
+                }
+              })
+            }
+            bctx.putImageData(imageData, 0, 0)
+          }
+        }
+
+        c.width = 1920/2
+        c.height = 1080/2
+        x.globalAlpha = 1
+        x.fillStyle = `#000c`
+        x.fillRect(0,0,c.width,c.height)
+        
+        process()
+        
+        oX = 0
+        oY = 0
+        oZ = 20
+        Rl = 0
+        Pt = 0
+        Yw = 0
+
+        l = imageData.data
+        for(i=0; i<l.length; i+=4){
+          
+          j = i/4
+          
+          X = j%res
+          Y = j/res|0
+          
+          red   = l[i+0]
+          green = l[i+1]
+          blue  = l[i+2]
+          alpha = 255
+
+          rgb = RGBFromHSV((t*300+data[j][3]**2*200+C(Math.PI*2/res*(X))*50+C(Math.PI*2/res*(Y))*10)%360, 1-(2-data[j][3]*2)**4/10, (2-data[j][3]*2)**1.75/1.25)
+          
+          red   = rgb[0] | 0
+          green = rgb[1] | 0
+          blue  = rgb[2] | 0
+          
+          l[i+0] = red
+          l[i+1] = green
+          l[i+2] = blue
+          l[i+3] = alpha
+        }
+        
+        cl    = 8/1
+        rw    = 4/1
+        sp    = res
+        scalew = 2.25/1.8
+        scaleh = 2.25/1.6
+        for(i = cl*rw|0; i--;){
+          tx = ((i%cl) - cl/2 +.5) * sp
+          ty = ((i/cl|0) - rw/2 +.5) * sp
+          x.drawImage(buffer,  c.width/2-(res/2 + tx)*scalew, c.height/2-(res/2 + ty) * scaleh, res * scalew, res*scaleh)
+        }
+
+        t+=1/60
+        requestAnimationFrame(Draw)
+      }
+      Draw()
+    </script>
+  </body>
+</html>
